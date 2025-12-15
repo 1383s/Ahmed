@@ -21,22 +21,21 @@
             measurementId: "G-J5R2EFM2D0"
         };
         
-        // 🚨 تعديل: الدور الحالي هو AHMED
         const CURRENT_ADMIN_ROLE = 'ahmed'; 
-        
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const auth = getAuth(app);
         const codesRef = ref(db, 'approvedStudents');
+        const blockedDevicesRef = ref(db, 'blockedDevices'); 
         
         let allApprovedCodes = {}; 
         let currentUserUid = null;
-        
-        // 🚨 تعديل: UID أحمد الثابت للتحقق من الصلاحية
         const AHMED_FIXED_UID = "4Mr7j0R3GmNrpxeaOWKzv71oHpY2"; 
-        
-        let allSaraCodes = []; // هنستخدم نفس الاسم داخليًا لسهولة الكود، لكنها أكواد أحمد الآن
+        let allSaraCodes = [];
         let currentReportCodes = [];
+        let allBlockedDevices = []; 
+
+        const DIVISIONS = ['علمي علوم', 'ادبي', 'علمي رياضة', 'ازهر']; 
 
         window.showToast = (message, type = "success") => { 
             const container = document.getElementById('toast-container');
@@ -52,12 +51,11 @@
             }, 5000);
         };
         
-        // 💡 Logic 1: التحقق من UID الأدمن الحالي (المُصلَّح)
+        // 💡 Logic 1: التحقق من UID الأدمن الحالي
         async function checkAdminStatus(uid) {
             if (uid === AHMED_FIXED_UID) { 
                 return true;
             } else {
-                // 🚨 تعديل: رسالة الخطأ لأحمد
                 window.showToast("❌ هذا الحساب غير مصرح له بالدخول للوحة تحكم Ahmed.", "error");
                 return false;
             }
@@ -103,8 +101,8 @@
             } while (allApprovedCodes[code]); 
             return code;
         }
-        
-        // 💡 Logic 6: إخراج الكود من الجهاز الحالي (مع التحقق)
+
+        // 💡 Logic 6: إخراج الكود من الجهاز الحالي
         window.ejectDevice = (uid, name) => checkAuthAndProceed(() => {
             if (!confirm(`متأكد من إخراج كود الطالب ${name} (${uid}) من جهازه الحالي؟`)) return;
             update(ref(db, 'approvedStudents/' + uid), {
@@ -113,8 +111,19 @@
                 window.showToast(`✅ تم إخراج كود ${uid} بنجاح.`, "success");
             }).catch(e => window.showToast("❌ فشل الإخراج: " + e.message, "error"));
         });
+        
+        // 💡 Logic 7: نسخ كود الجهاز
+        window.copyDeviceId = (deviceId) => {
+            if (!deviceId) {
+                window.showToast("❌ الكود غير مُفعل على جهاز حاليًا.", "warn");
+                return;
+            }
+            navigator.clipboard.writeText(deviceId)
+                .then(() => window.showToast(`✅ تم نسخ كود الجهاز: ${deviceId}`, "success"))
+                .catch(err => window.showToast("❌ فشل النسخ.", "error"));
+        };
 
-        // 💡 Logic 7: حذف الكود (مع التحقق)
+        // 💡 Logic 8: حذف الكود
         window.deleteCode = (uid, name) => checkAuthAndProceed(() => {
             if (!confirm(`متأكد من حذف كود الطالب ${name} (${uid}) نهائياً؟`)) return;
             remove(ref(db, 'approvedStudents/' + uid))
@@ -122,7 +131,7 @@
             .catch(e => window.showToast("❌ فشل الحذف: " + e.message, "error"));
         });
         
-        // 💡 Logic 8: تفعيل/تعطيل الكود (مع التحقق)
+        // 💡 Logic 9: تفعيل/تعطيل الكود
         window.toggleBlock = (uid, name, isBlocked) => checkAuthAndProceed(() => {
             update(ref(db, 'approvedStudents/' + uid), {
                 isBlocked: !isBlocked
@@ -131,15 +140,21 @@
             }).catch(e => window.showToast("❌ فشل تغيير الحالة: " + e.message, "error"));
         });
 
-        // 💡 Logic 9: إضافة كود جديد (AHMED) (مع التحقق)
+        // 💡 Logic 10: إضافة كود جديد (مع الشعبة)
         window.addNewCode = (e) => checkAuthAndProceed(() => {
             e.preventDefault();
             const form = e.target;
             const name = form.studentName.value;
+            const section = form.studentSection.value; 
             const price = parseFloat(form.price.value) || 0;
             const durationType = form.durationType.value;
             const newCode = document.getElementById('newCodeDisplay').textContent;
             
+            if (!section) {
+                window.showToast("❌ يجب اختيار شعبة الطالب.", "error");
+                return;
+            }
+
             let expiryTime = Date.now();
             
             if (durationType === 'trial') {
@@ -154,41 +169,114 @@
             set(ref(db, 'approvedStudents/' + newCode), {
                 uid: newCode,
                 name: name,
+                section: section, 
                 pricePaid: price,
-                addedByAdmin: CURRENT_ADMIN_ROLE, // ahmed
+                addedByAdmin: CURRENT_ADMIN_ROLE,
                 approvedAt: Date.now(),
                 expiry: expiryTime,
                 deviceId: "",
                 isBlocked: false,
                 isTrial: durationType === 'trial'
             }).then(() => {
-                window.showToast(`✅ تم إضافة الكود ${newCode} بنجاح.`, "success");
+                window.showToast(`✅ تم إضافة الكود ${newCode} بنجاح. الشعبة: ${section}`, "success");
                 window.toggleAddCodeForm(false);
                 form.reset();
             }).catch(error => {
                 window.showToast("❌ فشل الإضافة: " + error.message, "error");
             });
         }, e);
+
+        // 💡 Logic 11: فتح نموذج تعديل الطالب
+        window.openEditModal = (uid, currentName, currentSection) => checkAuthAndProceed(() => {
+            document.getElementById('edit_uid').value = uid;
+            document.getElementById('edit_name').value = currentName;
+            
+            const sectionSelect = document.getElementById('edit_section');
+            sectionSelect.innerHTML = ''; 
+            DIVISIONS.forEach(div => {
+                const option = document.createElement('option');
+                option.value = div;
+                option.textContent = div;
+                if (div === currentSection) option.selected = true;
+                sectionSelect.appendChild(option);
+            });
+            
+            document.getElementById('editModal').style.display = 'flex';
+        });
+
+        // 💡 Logic 12: حفظ التعديلات
+        window.saveEdit = () => checkAuthAndProceed(() => {
+            const uid = document.getElementById('edit_uid').value;
+            const newName = document.getElementById('edit_name').value;
+            const newSection = document.getElementById('edit_section').value;
+
+            update(ref(db, 'approvedStudents/' + uid), {
+                name: newName,
+                section: newSection
+            }).then(() => {
+                window.showToast(`✅ تم تعديل بيانات الطالب ${uid} بنجاح.`, "success");
+                document.getElementById('editModal').style.display = 'none';
+            }).catch(e => window.showToast("❌ فشل التعديل: " + e.message, "error"));
+        });
         
-        // 💡 Logic 10: تحميل الأكواد وتصنيفها
+        // 💡 Logic 13: حظر جهاز معين (يستخدم في زر الحظر الفردي وفي حظر جهاز جديد)
+        window.blockDevice = (deviceId) => checkAuthAndProceed(() => {
+            if (!deviceId || deviceId.trim() === "") {
+                window.showToast("❌ يجب إدخال كود الجهاز.", "warn");
+                return;
+            }
+            const cleanId = deviceId.trim();
+
+            set(ref(db, 'blockedDevices/' + cleanId), {
+                deviceId: cleanId,
+                blockedBy: CURRENT_ADMIN_ROLE,
+                blockedAt: Date.now(),
+            }).then(() => {
+                window.showToast(`✅ تم حظر الجهاز ${cleanId} بنجاح.`, "success");
+            }).catch(e => window.showToast("❌ فشل حظر الجهاز: " + e.message, "error"));
+        });
+
+        // 💡 Logic 14: حظر جهاز جديد (يستخدم دالة blockDevice)
+        window.blockNewDevice = () => {
+            const deviceId = prompt("أدخل كود الجهاز الذي تريد حظره:");
+            if (deviceId) {
+                blockDevice(deviceId);
+            }
+        };
+
+        // 💡 Logic 15: إلغاء حظر جهاز
+        window.unblockDevice = (deviceId) => checkAuthAndProceed(() => {
+            if (!confirm(`متأكد من إلغاء حظر الجهاز ${deviceId}؟`)) return;
+            remove(ref(db, 'blockedDevices/' + deviceId))
+            .then(() => window.showToast(`✅ تم إلغاء حظر الجهاز ${deviceId} بنجاح.`, "success"))
+            .catch(e => window.showToast("❌ فشل الإلغاء: " + e.message, "error"));
+        });
+        
+        // 💡 Logic 16: التحقق من حظر الجهاز
+        function isDeviceBlocked(deviceId) {
+            if (!deviceId) return false;
+            // التحقق من قائمة allBlockedDevices المخزنة
+            return allBlockedDevices.some(device => device.deviceId === deviceId);
+        }
+
+        // 💡 Logic 17: تحميل الأكواد وتصنيفها (تحديث مع جلب الأجهزة المحظورة)
         function loadSaraCodes() {
+            // جلب الأكواد
             onValue(codesRef, (snapshot) => {
                 allApprovedCodes = {}; 
                 let activeCount = 0;
                 let blockedCount = 0;
                 let expiredCount = 0;
                 let totalAmount = 0;
-                allSaraCodes = []; // المخزون المؤقت لأكواد أحمد
+                allSaraCodes = [];
                 
                 const now = Date.now();
                 
                 snapshot.forEach((childSnapshot) => {
                     const data = childSnapshot.val();
                     data.uid = childSnapshot.key;
-                    
                     allApprovedCodes[childSnapshot.key] = data;
                     
-                    // 🚨 فلترة الأكواد الخاصة بأحمد
                     if ((data.addedByAdmin || '').toLowerCase() === CURRENT_ADMIN_ROLE) { 
                         allSaraCodes.push(data);
                         totalAmount += (data.pricePaid || 0);
@@ -206,31 +294,45 @@
                     }
                 });
                 
-                // تحديث أرقام البطاقات الإحصائية
                 document.getElementById('statActiveCount').textContent = activeCount;
                 document.getElementById('statBlockedCount').textContent = blockedCount;
                 document.getElementById('statExpiredCount').textContent = expiredCount;
                 
-                // عرض الإحصائيات الأخرى (الإجمالية)
                 renderStats(activeCount + blockedCount + expiredCount, totalAmount);
-                // 🚨 تعديل: رسالة التحديث لأحمد
                 window.showToast("✅ تم تحديث بيانات لوحتك يا أحمد.", "success");
                 
-                // لو كان فيه تقرير مفتوح، نحدثه عشان الداتا تكون صح
                 const activeReport = document.getElementById('reportDisplayArea').getAttribute('data-active-report');
                 if (activeReport) {
                     toggleReportDisplay(activeReport, true); 
                 } else {
-                    document.getElementById('codesTableBody').innerHTML = '<tr><td colspan="7">اختر بطاقة لعرض التفاصيل...</td></tr>';
+                    document.getElementById('codesTableBody').innerHTML = '<tr><td colspan="8">اختر بطاقة لعرض التفاصيل...</td></tr>';
                 }
-                
             }, (error) => {
-                window.showToast("❌ فشل الاتصال بقاعدة البيانات: " + error.message, "error");
+                window.showToast("❌ فشل الاتصال بقاعدة البيانات (الأكواد): " + error.message, "error");
+            });
+
+            // جلب الأجهزة المحظورة
+            onValue(blockedDevicesRef, (snapshot) => {
+                allBlockedDevices = [];
+                snapshot.forEach((childSnapshot) => {
+                    const data = childSnapshot.val();
+                    data.deviceId = childSnapshot.key;
+                    allBlockedDevices.push(data);
+                });
+                // تحديث عرض قائمة الأجهزة المحظورة لو كانت مفتوحة
+                if (document.getElementById('blockedDevicesArea').style.display === 'block') {
+                    renderBlockedDevicesTable(allBlockedDevices);
+                }
+            }, (error) => {
+                 window.showToast("❌ فشل الاتصال بقاعدة البيانات (الأجهزة المحظورة): " + error.message, "error");
             });
         }
         
-        // 💡 Logic 11: التبديل بين محتوى البطاقات (العرض والإخفاء)
+        // 💡 Logic 18: التبديل بين محتوى البطاقات
         window.toggleReportDisplay = (reportType, forceUpdate = false) => {
+            // إخفاء منطقة الأجهزة المحظورة عند عرض تقارير الأكواد
+            document.getElementById('blockedDevicesArea').style.display = 'none';
+
             const displayArea = document.getElementById('reportDisplayArea');
             const currentActive = displayArea.getAttribute('data-active-report');
             const now = Date.now();
@@ -255,7 +357,7 @@
             if (currentActive === reportType && !forceUpdate) {
                 displayArea.style.display = 'none';
                 displayArea.removeAttribute('data-active-report');
-                document.getElementById('codesTableBody').innerHTML = '<tr><td colspan="7">اختر بطاقة لعرض التفاصيل...</td></tr>';
+                document.getElementById('codesTableBody').innerHTML = '<tr><td colspan="8">اختر بطاقة لعرض التفاصيل...</td></tr>';
                 document.getElementById('reportTitle').textContent = '';
                 searchInput.value = ''; 
                 
@@ -268,8 +370,24 @@
                 renderCodesTable(filteredCodes);
             }
         };
+
+        // 💡 Logic 19: عرض / إخفاء منطقة الأجهزة المحظورة
+        window.toggleBlockedDevicesArea = () => {
+            // إخفاء منطقة تقارير الأكواد
+            const reportArea = document.getElementById('reportDisplayArea');
+            reportArea.style.display = 'none';
+            reportArea.removeAttribute('data-active-report');
+            
+            const blockedArea = document.getElementById('blockedDevicesArea');
+            if (blockedArea.style.display === 'block') {
+                blockedArea.style.display = 'none';
+            } else {
+                blockedArea.style.display = 'block';
+                renderBlockedDevicesTable(allBlockedDevices);
+            }
+        };
         
-        // 💡 Logic 12: إغلاق منطقة التقرير بالزر
+        // 💡 Logic 20: إغلاق منطقة التقرير بالزر
         window.clearSearchAndTable = () => {
             const activeReport = document.getElementById('reportDisplayArea').getAttribute('data-active-report');
             if (activeReport) {
@@ -277,7 +395,7 @@
             }
         }
         
-        // 💡 Logic 13: البحث بالكود أو الاسم في الفئة الحالية
+        // 💡 Logic 21: البحث بالكود أو الاسم أو الشعبة
         window.filterTable = () => {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
@@ -288,14 +406,16 @@
 
             const results = currentReportCodes.filter(data => 
                 (data.uid && data.uid.toLowerCase().includes(searchTerm)) || 
-                (data.name && data.name.toLowerCase().includes(searchTerm))   
+                (data.name && data.name.toLowerCase().includes(searchTerm)) ||
+                (data.section && data.section.toLowerCase().includes(searchTerm))
             );
             
             renderCodesTable(results);
         };
 
 
-        // 💡 Main Auth State Observer
+        // 💡 Main Auth State Observer - يبقى كما هو
+
         onAuthStateChanged(auth, (user) => {
             const loginContainer = document.getElementById('loginContainer');
             const mainContent = document.getElementById('mainContent');
@@ -335,7 +455,8 @@
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             return `${days}ي ${hours}س`;
         }
-
+        
+        // 💡 دالة عرض جدول الأكواد (تحديث شامل)
         function renderCodesTable(codes) {
             const tbody = document.getElementById('codesTableBody');
             tbody.innerHTML = '';
@@ -343,13 +464,29 @@
             if (codes.length === 0) {
                  const title = document.getElementById('reportDisplayArea').getAttribute('data-active-report');
                  const message = (title) ? 'لا توجد أكواد في هذه الفئة حاليًا.' : 'اختر بطاقة لعرض التفاصيل...';
-                 tbody.innerHTML = `<tr><td colspan="7">${message}</td></tr>`;
+                 tbody.innerHTML = `<tr><td colspan="8">${message}</td></tr>`;
                 return;
             }
 
             codes.forEach(data => {
                 const isExpired = data.expiry < Date.now();
                 const isBlocked = data.isBlocked === true;
+                const currentDeviceId = data.deviceId; 
+
+                // لوجيك زرار حظر/إلغاء حظر الجهاز
+                let blockDeviceBtn = '';
+                if (currentDeviceId) {
+                    const isDeviceGloballyBlocked = isDeviceBlocked(currentDeviceId);
+                    
+                    if (isDeviceGloballyBlocked) {
+                        blockDeviceBtn = `<button onclick="unblockDevice('${currentDeviceId}')" class="unblock-btn" title="إلغاء حظر الجهاز ${currentDeviceId}">إلغاء حظر الجهاز</button>`;
+                    } else {
+                        blockDeviceBtn = `<button onclick="blockDevice('${currentDeviceId}')" class="delete-btn" title="حظر الجهاز ${currentDeviceId}">حظر الجهاز</button>`;
+                    }
+                } else {
+                    blockDeviceBtn = '';
+                }
+
                 
                 let statusText;
                 let statusClass;
@@ -366,21 +503,26 @@
                 }
                 
                 const blockBtnText = isBlocked ? 'تفعيل' : 'تعطيل';
-                // إخراج الجهاز مُعطل لو الكود منتهي أو معطّل يدويًا
-                const ejectDisabled = isExpired || isBlocked ? 'disabled' : '';
-                const ejectTitle = isExpired || isBlocked ? 'لا يمكن إخراج الجهاز لكود غير نشط' : '';
+                const ejectDisabled = !data.deviceId || isExpired || isBlocked ? 'disabled' : '';
+                const ejectTitle = !data.deviceId ? 'الكود غير مفعل' : (isExpired || isBlocked ? 'لا يمكن إخراج الجهاز لكود غير نشط' : '');
 
                 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td class="code-uid">${data.uid}</td>
                     <td>${data.name}</td>
+                    <td>${data.section || 'N/A'}</td> 
                     <td>${data.pricePaid} ج.م</td>
                     <td>${formatExpiry(data.expiry)}</td>
+                    <td class="device-id">
+                        ${data.deviceId || 'غير مُفعل'}
+                        <button onclick="copyDeviceId('${data.deviceId}')" class="copy-btn" title="نسخ كود الجهاز" ${!data.deviceId ? 'disabled' : ''}>📋</button>
+                    </td>
                     <td class="${statusClass}">${statusText}</td>
-                    <td class="device-id">${data.deviceId || 'غير مُفعل'}</td>
                     <td class="actions">
-                        <button onclick="ejectDevice('${data.uid}', '${data.name}')" class="eject-btn" ${ejectDisabled} title="${ejectTitle}">إخراج الجهاز</button>
+                        <button onclick="openEditModal('${data.uid}', '${data.name}', '${data.section || ''}')" class="edit-btn" title="تعديل بيانات الطالب">تعديل</button>
+                        ${blockDeviceBtn} 
+                        <button onclick="ejectDevice('${data.uid}', '${data.name}')" class="eject-btn" ${ejectDisabled} title="${ejectTitle}">إخراج</button>
                         <button onclick="toggleBlock('${data.uid}', '${data.name}', ${isBlocked})" class="${isBlocked ? 'unblock-btn' : 'block-btn'}">${blockBtnText}</button>
                         <button onclick="deleteCode('${data.uid}', '${data.name}')" class="delete-btn">حذف</button>
                     </td>
@@ -388,6 +530,39 @@
                 tbody.appendChild(tr);
             });
         }
+        
+        // 💡 دالة عرض جدول الأجهزة المحظورة (إضافة عمود الأكواد المفعّلة)
+        window.renderBlockedDevicesTable = (devices) => {
+             const tbody = document.getElementById('blockedDevicesTableBody');
+             tbody.innerHTML = '';
+             if (devices.length === 0) {
+                 tbody.innerHTML = `<tr><td colspan="5">لا توجد أجهزة محظورة حاليًا.</td></tr>`; 
+                 return;
+             }
+             devices.forEach(device => {
+                 const date = new Date(device.blockedAt).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' });
+                 
+                 // البحث عن الأكواد المرتبطة بالجهاز ده
+                 const relatedCodes = allSaraCodes.filter(c => c.deviceId === device.deviceId);
+                 const codeLinks = relatedCodes.map(c => 
+                     `<span class="code-uid">${c.uid} (${c.name})</span>`
+                 ).join('<br>');
+                 
+                 const tr = document.createElement('tr');
+                 tr.innerHTML = `
+                    <td class="code-uid">${device.deviceId}</td>
+                    <td>${device.blockedBy}</td>
+                    <td>${date}</td>
+                    <td>${codeLinks || 'لا يوجد كود مفعل'}</td> 
+                    <td class="actions">
+                        <button onclick="unblockDevice('${device.deviceId}')" class="unblock-btn">إلغاء الحظر</button>
+                    </td>
+                 `;
+                 tbody.appendChild(tr);
+             });
+        }
+        
+        // باقي الدوال المساعدة (renderStats, toggleStats, toggleAddCodeForm) تبقى كما هي
         
         window.renderStats = (totalCodes, totalAmount) => {
              const statsContainer = document.getElementById('statsContainer');
@@ -424,6 +599,12 @@
                  checkAuthAndProceed(() => {
                     form.style.display = 'block';
                     document.getElementById('newCodeDisplay').textContent = generateUniqueCode();
+                    // ملء خيارات الشعبة
+                    const select = document.getElementById('addCodeForm').studentSection;
+                    select.innerHTML = '<option value="">اختر الشعبة</option>';
+                    DIVISIONS.forEach(div => {
+                         select.innerHTML += `<option value="${div}">${div}</option>`;
+                    });
                 });
             } else {
                 form.style.display = 'none';
@@ -442,7 +623,7 @@
             --warn: #FFA500;
             --bg-mid: #222;
             --hover-dark: #333;
-            --expired-color: #f7a048; /* لون برتقالي لانتهاء الصلاحية */
+            --expired-color: #f7a048; 
         }
         * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
         body { background: var(--bg-dark); color: var(--text-light); margin: 0; padding: 0; }
@@ -451,7 +632,6 @@
         
         /* Login Style */
         #loginContainer { background: var(--bg-mid); padding: 30px; border-radius: 10px; max-width: 400px; margin: 100px auto; }
-        /* 🚨 تعديل: عنوان الدخول */
         #loginContainer h2 { color: var(--secondary); text-align: center; margin-bottom: 20px; }
         #loginContainer input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #444; border-radius: 5px; background: #333; color: var(--text-light); }
         #loginContainer button { width: 100%; padding: 10px; background: var(--primary); color: var(--bg-dark); border: none; border-radius: 5px; font-weight: 700; cursor: pointer; transition: 0.3s; }
@@ -465,13 +645,14 @@
         
         /* Stats & Buttons */
         .controls-row { display: flex; justify-content: space-between; gap: 15px; margin-bottom: 20px; }
-        #addCodeButton, #statsButton {
+        #addCodeButton, #statsButton, #blockedDevicesButton {
             background: var(--primary); color: var(--bg-dark); padding: 10px 20px; 
             border: none; border-radius: 8px; font-weight: 700; cursor: pointer; 
             transition: 0.3s;
         }
-        #addCodeButton:hover, #statsButton:hover { background: #00cc00; }
+        #addCodeButton:hover, #statsButton:hover, #blockedDevicesButton:hover { background: #00cc00; }
         #statsButton { background: var(--secondary); }
+        #blockedDevicesButton { background: var(--warn); color: var(--bg-dark); } 
 
         #statsContainer { 
             display: none; 
@@ -560,12 +741,14 @@
         .status-blocked { color: var(--warn); font-weight: 700; }
         .status-expired { color: var(--error); font-weight: 700; } 
         .actions button {
-            padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; margin: 2px; font-weight: 700; transition: 0.2s;
+            padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; margin: 2px; font-weight: 700; transition: 0.2s; font-size: 12px;
         }
         .actions button[disabled] {
             opacity: 0.5;
             cursor: not-allowed;
         }
+        .edit-btn { background: #006699; color: var(--text-light); } 
+        .copy-btn { background: #444; color: var(--secondary); margin-left: 5px; } 
         .eject-btn { background: #0099cc; color: var(--text-light); }
         .block-btn { background: var(--warn); color: var(--bg-dark); }
         .unblock-btn { background: var(--primary); color: var(--bg-dark); }
@@ -581,7 +764,26 @@
             width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #444; border-radius: 5px; background: #333; color: var(--text-light);
             margin-bottom: 10px;
         }
-
+        
+        /* Edit Modal Style */
+        .modal {
+            display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7);
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background-color: var(--bg-mid); margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 400px; border-radius: 10px;
+        }
+        .modal-content label { display: block; margin-top: 10px; color: var(--secondary); }
+        .modal-content input, .modal-content select { width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 10px; border-radius: 4px; background: #333; color: var(--text-light); border: 1px solid #444; }
+        .modal-buttons button { padding: 8px 15px; border-radius: 5px; margin-top: 10px; cursor: pointer; font-weight: 700; }
+        
+        /* Blocked Devices Area Style */
+        #blockedDevicesArea {
+            display: none; margin-top: 20px; background: #1a1a1a; padding: 20px; border-radius: 10px; border: 2px solid var(--error);
+        }
+        #blockedDevicesArea h2 { color: var(--error); border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; }
+        #blockNewDeviceBtn { background: var(--error); color: var(--text-light); margin-bottom: 15px; }
+        
         /* Toast */
         #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 10000; }
         .toast { padding: 12px 20px; border-radius: 10px; margin-top: 10px; font-weight: 700; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); opacity: 0; animation: toastIn 0.5s forwards; transition: opacity 0.5s, transform 0.5s; min-width: 200px; text-align: right; }
@@ -612,6 +814,7 @@
         
         <div class="controls-row">
             <button id="addCodeButton" onclick="toggleAddCodeForm(true)">+ إضافة كود جديد</button>
+            <button id="blockedDevicesButton" onclick="toggleBlockedDevicesArea()">قسم حظر الأجهزة 🚫</button>
             <button id="statsButton" onclick="toggleStats(true)">عرض الإجمالي 📈</button>
         </div>
         
@@ -639,6 +842,10 @@
                 <label>اسم الطالب:</label>
                 <input type="text" name="studentName" required>
                 
+                <label>شعبة الطالب:</label>
+                <select name="studentSection" required>
+                    </select>
+
                 <label>المبلغ المدفوع (جنيه):</label>
                 <input type="number" name="price" min="0" value="0">
 
@@ -656,11 +863,32 @@
             </form>
         </div>
         
+        <div id="blockedDevicesArea">
+            <h2>الأجهزة المحظورة 🚫</h2>
+            <button id="blockNewDeviceBtn" onclick="blockNewDevice()">+ حظر جهاز جديد (UID)</button>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>كود الجهاز المحظور (UID)</th>
+                            <th>بواسطة</th>
+                            <th>تاريخ الحظر</th>
+                            <th>الأكواد المفعّلة</th> 
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blockedDevicesTableBody">
+                        <tr><td colspan="5">جاري التحميل...</td></tr> 
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
         <div id="reportDisplayArea" style="display:none; margin-top: 20px;">
             <h2 id="reportTitle"></h2>
             
             <div class="search-container">
-                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="ابحث بالكود أو الاسم..." />
+                <input type="text" id="searchInput" onkeyup="filterTable()" placeholder="ابحث بالكود أو الاسم أو الشعبة..." />
                 <button onclick="clearSearchAndTable()">إغلاق التقرير ❌</button>
             </div>
 
@@ -670,21 +898,41 @@
                         <tr>
                             <th>الكود (UID)</th>
                             <th>اسم الطالب</th>
+                            <th>الشعبة</th> 
                             <th>المبلغ</th>
                             <th>الوقت المتبقي</th>
-                            <th>حالة الكود</th>
                             <th>جهاز التفعيل</th>
+                            <th>حالة الكود</th>
                             <th>الإجراءات</th>
                         </tr>
                     </thead>
                     <tbody id="codesTableBody">
-                        <tr><td colspan="7">اختر بطاقة لعرض التفاصيل...</td></tr> 
+                        <tr><td colspan="8">اختر بطاقة لعرض التفاصيل...</td></tr> 
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 
+</div>
+
+<div id="editModal" class="modal" onclick="if(event.target.id=='editModal') this.style.display='none'">
+    <div class="modal-content">
+        <h3>تعديل بيانات الطالب</h3>
+        <input type="hidden" id="edit_uid">
+        
+        <label for="edit_name">اسم الطالب:</label>
+        <input type="text" id="edit_name" required>
+        
+        <label for="edit_section">شعبة الطالب:</label>
+        <select id="edit_section" required>
+            </select>
+        
+        <div class="modal-buttons">
+            <button onclick="saveEdit()" style="background:var(--primary);">حفظ التعديل</button>
+            <button onclick="document.getElementById('editModal').style.display='none'" style="background:#444; color:var(--text-light);">إلغاء</button>
+        </div>
+    </div>
 </div>
 
 <div id="toast-container"></div>
