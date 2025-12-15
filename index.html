@@ -34,8 +34,9 @@
         let allSaraCodes = [];
         let currentReportCodes = [];
         let allBlockedDevices = []; 
-
-        const DIVISIONS = ['علمي علوم', 'ادبي', 'علمي رياضة', 'ازهر']; 
+        
+        // 💡 التعديل: قائمة الشعب لـ Ahmed
+        const DIVISIONS = ['علمي علوم', 'أدبي', 'علمي رياضة', 'أزهر']; 
 
         window.showToast = (message, type = "success") => { 
             const container = document.getElementById('toast-container');
@@ -259,7 +260,7 @@
             return allBlockedDevices.some(device => device.deviceId === deviceId);
         }
 
-        // 💡 Logic 17: تحميل الأكواد وتصنيفها (تحديث مع جلب الأجهزة المحظورة)
+        // 💡 Logic 17: تحميل الأكواد وتصنيفها (تحديث مع فلترة الأجهزة المحظورة)
         function loadSaraCodes() {
             // جلب الأكواد
             onValue(codesRef, (snapshot) => {
@@ -311,14 +312,21 @@
                 window.showToast("❌ فشل الاتصال بقاعدة البيانات (الأكواد): " + error.message, "error");
             });
 
-            // جلب الأجهزة المحظورة
+            // جلب الأجهزة المحظورة (تمت الفلترة هنا)
             onValue(blockedDevicesRef, (snapshot) => {
                 allBlockedDevices = [];
+                const currentAdminRole = CURRENT_ADMIN_ROLE; // 'ahmed'
+                
                 snapshot.forEach((childSnapshot) => {
                     const data = childSnapshot.val();
                     data.deviceId = childSnapshot.key;
-                    allBlockedDevices.push(data);
+                    
+                    // 🚨 التعديل الجديد: الفلترة على الأجهزة المحظورة بواسطة الأدمن الحالي فقط 🚨
+                    if ((data.blockedBy || '').toLowerCase() === currentAdminRole) {
+                        allBlockedDevices.push(data);
+                    }
                 });
+                
                 // تحديث عرض قائمة الأجهزة المحظورة لو كانت مفتوحة
                 if (document.getElementById('blockedDevicesArea').style.display === 'block') {
                     renderBlockedDevicesTable(allBlockedDevices);
