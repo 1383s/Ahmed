@@ -35,9 +35,8 @@
         let currentReportCodes = [];
         let allBlockedDevices = []; 
 
-        const DIVISIONS = ['علمي علوم', 'أدبي', 'علمي رياضة', 'أزهر']; 
+        const DIVISIONS = ['علمي علوم', 'ادبي', 'علمي رياضة', 'ازهر']; 
         
-        // 💡 متغيرات الـ Bulk Actions
         let selectedUids = new Set(); 
 
         window.showToast = (message, type = "success") => { 
@@ -54,7 +53,7 @@
             }, 5000);
         };
         
-        // 💡 Logic 1 & 2: checkAdminStatus & checkAuthAndProceed (تبقى كما هي)
+        // 💡 Logic 1 & 2: checkAdminStatus & checkAuthAndProceed
         async function checkAdminStatus(uid) {
             if (uid === AHMED_FIXED_UID) { 
                 return true;
@@ -74,7 +73,7 @@
             }
         }
 
-        // 💡 Logic 3, 4, 5: Login, Logout, generateUniqueCode (تبقى كما هي)
+        // 💡 Logic 3, 4, 5: Login, Logout, generateUniqueCode
         window.handleLogin = async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
@@ -107,6 +106,7 @@
             if (!confirm(`متأكد من إخراج كود الطالب ${name} (${uid}) من جهازه الحالي؟`)) return;
             update(ref(db, 'approvedStudents/' + uid), {
                 deviceId: "",
+                lastModified: Date.now()
             }).then(() => {
                 window.showToast(`✅ تم إخراج كود ${uid} بنجاح.`, "success");
             }).catch(e => window.showToast("❌ فشل الإخراج: " + e.message, "error"));
@@ -134,13 +134,14 @@
         // 💡 Logic 9: تفعيل/تعطيل الكود
         window.toggleBlock = (uid, name, isBlocked) => checkAuthAndProceed(() => {
             update(ref(db, 'approvedStudents/' + uid), {
-                isBlocked: !isBlocked
+                isBlocked: !isBlocked,
+                lastModified: Date.now()
             }).then(() => {
                 window.showToast(`✅ تم ${!isBlocked ? 'تعطيل' : 'تفعيل'} كود ${name} بنجاح.`, "success");
             }).catch(e => window.showToast("❌ فشل تغيير الحالة: " + e.message, "error"));
         });
 
-        // 💡 Logic 10: إضافة كود جديد (مع الشعبة، سجل الأجهزة، وتحديد التغيير الأقصى)
+        // 💡 Logic 10: إضافة كود جديد
         window.addNewCode = (e) => checkAuthAndProceed(() => {
             e.preventDefault();
             const form = e.target;
@@ -165,21 +166,24 @@
                 window.showToast("❌ يجب تحديد مدة التفعيل (ساعة أو 30 يوم).", "error");
                 return;
             }
-
+            
+            const currentTime = Date.now();
+            
             set(ref(db, 'approvedStudents/' + newCode), {
                 uid: newCode,
                 name: name,
                 section: section, 
                 pricePaid: price,
                 addedByAdmin: CURRENT_ADMIN_ROLE,
-                approvedAt: Date.now(),
+                approvedAt: currentTime,
                 expiry: expiryTime,
                 deviceId: "",
                 isBlocked: false,
                 isTrial: durationType === 'trial',
-                deviceChangeCount: 0, // 💡 الميزة الجديدة
-                maxDeviceChanges: 5,   // 💡 الميزة الجديدة (الافتراضي 5)
-                deviceHistory: []      // 💡 الميزة الجديدة
+                deviceChangeCount: 0,
+                maxDeviceChanges: 5,
+                deviceHistory: [],
+                lastModified: currentTime
             }).then(() => {
                 window.showToast(`✅ تم إضافة الكود ${newCode} بنجاح. الشعبة: ${section}`, "success");
                 window.toggleAddCodeForm(false);
@@ -188,8 +192,8 @@
                 window.showToast("❌ فشل الإضافة: " + error.message, "error");
             });
         }, e);
-        
-        // 💡 Logic 11: فتح نموذج تعديل الطالب (تبقى كما هي)
+
+        // 💡 Logic 11: فتح نموذج تعديل الطالب
         window.openEditModal = (uid, currentName, currentSection) => checkAuthAndProceed(() => {
             document.getElementById('edit_uid').value = uid;
             document.getElementById('edit_name').value = currentName;
@@ -207,7 +211,7 @@
             document.getElementById('editModal').style.display = 'flex';
         });
 
-        // 💡 Logic 12: حفظ التعديلات (تبقى كما هي)
+        // 💡 Logic 12: حفظ التعديلات
         window.saveEdit = () => checkAuthAndProceed(() => {
             const uid = document.getElementById('edit_uid').value;
             const newName = document.getElementById('edit_name').value;
@@ -215,14 +219,15 @@
 
             update(ref(db, 'approvedStudents/' + uid), {
                 name: newName,
-                section: newSection
+                section: newSection,
+                lastModified: Date.now() // 🚨 تحديث زمني
             }).then(() => {
                 window.showToast(`✅ تم تعديل بيانات الطالب ${uid} بنجاح.`, "success");
                 document.getElementById('editModal').style.display = 'none';
             }).catch(e => window.showToast("❌ فشل التعديل: " + e.message, "error"));
         });
         
-        // 💡 Logic 13, 14, 15: حظر/إلغاء حظر جهاز (تبقى كما هي)
+        // 💡 Logic 13: حظر جهاز معين
         window.blockDevice = (deviceId) => checkAuthAndProceed(() => {
             if (!deviceId || deviceId.trim() === "") {
                 window.showToast("❌ يجب إدخال كود الجهاز.", "warn");
@@ -239,6 +244,7 @@
             }).catch(e => window.showToast("❌ فشل حظر الجهاز: " + e.message, "error"));
         });
 
+        // 💡 Logic 14: حظر جهاز جديد
         window.blockNewDevice = () => {
             const deviceId = prompt("أدخل كود الجهاز الذي تريد حظره:");
             if (deviceId) {
@@ -246,6 +252,7 @@
             }
         };
 
+        // 💡 Logic 15: إلغاء حظر جهاز
         window.unblockDevice = (deviceId) => checkAuthAndProceed(() => {
             if (!confirm(`متأكد من إلغاء حظر الجهاز ${deviceId}؟`)) return;
             remove(ref(db, 'blockedDevices/' + deviceId))
@@ -259,7 +266,7 @@
             return allBlockedDevices.some(device => device.deviceId === deviceId);
         }
 
-        // 💡 Logic 17: تحميل الأكواد وتصنيفها (تبقى كما هي)
+        // 💡 Logic 17: تحميل الأكواد وتصنيفها (مع الترتيب الزمني)
         function loadSaraCodes() {
             // جلب الأكواد
             onValue(codesRef, (snapshot) => {
@@ -292,6 +299,13 @@
                             activeCount++;
                         }
                     }
+                });
+                
+                // 🚨 الترتيب من الأحدث للأقدم (حسب lastModified/approvedAt) 🚨
+                allSaraCodes.sort((a, b) => {
+                    const timeA = a.lastModified || a.approvedAt || 0; 
+                    const timeB = b.lastModified || b.approvedAt || 0;
+                    return timeB - timeA; 
                 });
                 
                 document.getElementById('statActiveCount').textContent = activeCount;
@@ -333,10 +347,11 @@
             });
         }
         
-        // 💡 Logic 18, 19, 20, 21: (toggleReportDisplay, toggleBlockedDevicesArea, clearSearchAndTable, filterTable) - تبقى كما هي
-
+        // 💡 Logic 18: التبديل بين محتوى البطاقات
         window.toggleReportDisplay = (reportType, forceUpdate = false) => {
             document.getElementById('blockedDevicesArea').style.display = 'none';
+            document.getElementById('bulkCodeFormContainer').style.display = 'none'; 
+            document.getElementById('addCodeFormContainer').style.display = 'none';
 
             const displayArea = document.getElementById('reportDisplayArea');
             const currentActive = displayArea.getAttribute('data-active-report');
@@ -376,11 +391,15 @@
             }
         };
 
+        // 💡 Logic 19: عرض / إخفاء منطقة الأجهزة المحظورة
         window.toggleBlockedDevicesArea = () => {
             const reportArea = document.getElementById('reportDisplayArea');
             reportArea.style.display = 'none';
             reportArea.removeAttribute('data-active-report');
             
+            document.getElementById('bulkCodeFormContainer').style.display = 'none'; 
+            document.getElementById('addCodeFormContainer').style.display = 'none';
+
             const blockedArea = document.getElementById('blockedDevicesArea');
             if (blockedArea.style.display === 'block') {
                 blockedArea.style.display = 'none';
@@ -390,6 +409,7 @@
             }
         };
         
+        // 💡 Logic 20: إغلاق منطقة التقرير بالزر
         window.clearSearchAndTable = () => {
             const activeReport = document.getElementById('reportDisplayArea').getAttribute('data-active-report');
             if (activeReport) {
@@ -397,6 +417,7 @@
             }
         }
         
+        // 💡 Logic 21: البحث بالكود أو الاسم أو الشعبة
         window.filterTable = () => {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
@@ -423,11 +444,14 @@
             }
             if (!confirm(`متأكد من تطبيق الإجراء على ${uids.length} كود؟`)) return;
 
+            // إضافة lastModified للتحديثات
+            const updatesData = { ...dataToUpdate, lastModified: Date.now() };
+
             const updates = {};
             uids.forEach(uid => {
                 updates['approvedStudents/' + uid] = { 
                     ...(allApprovedCodes[uid] || {}),
-                    ...dataToUpdate 
+                    ...updatesData 
                 };
             });
 
@@ -469,18 +493,21 @@
                 return;
              }
              
-             const dataToUpdate = uids.reduce((updates, uid) => {
-                const currentExpiry = allApprovedCodes[uid]?.expiry || Date.now();
-                const newExpiry = currentExpiry + (daysInt * 24 * 60 * 60 * 1000);
-                // نستخدم التحديث العام عشان نحافظ على البيانات
-                updates[uid] = { 
-                    ...(allApprovedCodes[uid] || {}), 
-                    expiry: newExpiry 
-                };
-                return updates;
-             }, {});
+             const updates = {};
+             const now = Date.now();
              
-             update(ref(db, 'approvedStudents'), dataToUpdate)
+             uids.forEach(uid => {
+                const currentExpiry = allApprovedCodes[uid]?.expiry || now;
+                const newExpiry = currentExpiry + (daysInt * 24 * 60 * 60 * 1000);
+                
+                updates['approvedStudents/' + uid] = { 
+                    ...(allApprovedCodes[uid] || {}), 
+                    expiry: newExpiry,
+                    lastModified: now 
+                };
+             });
+             
+             update(ref(db), updates)
                 .then(() => {
                     window.showToast(`✅ تم تجديد ${uids.length} كود لـ ${daysInt} يوم.`, "success");
                     window.toggleBulkControls(false);
@@ -545,8 +572,7 @@
             } else {
                 codes.forEach(c => selectedUids.delete(c.uid));
             }
-            // لتحديث الـ Checkboxes في الـ DOM
-             document.querySelectorAll('#codesTableBody input[type="checkbox"]').forEach(cb => cb.checked = isChecked);
+            document.querySelectorAll('#codesTableBody input[type="checkbox"]').forEach(cb => cb.checked = isChecked);
             window.updateBulkControls();
         };
 
@@ -582,8 +608,9 @@
             const form = document.getElementById('bulkCodeFormContainer');
             if (show) {
                  checkAuthAndProceed(() => {
+                    document.getElementById('addCodeFormContainer').style.display = 'none'; 
                     form.style.display = 'block';
-                    // ملء خيارات الشعبة
+                    
                     const select = document.getElementById('bulkCodeForm').bulkSection;
                     select.innerHTML = '<option value="">اختر الشعبة</option>';
                     DIVISIONS.forEach(div => {
@@ -626,11 +653,12 @@
             
             const updates = {};
             const codesGenerated = [];
+            const currentTime = Date.now();
             
             for (let i = 1; i <= count; i++) {
                 const newCode = generateUniqueCode();
-                const studentName = `${bundleName} ${i}`; // اسم الطالب هو (اسم الرزمة + رقم الكود)
-                const expiryTime = Date.now() + expiryTimeOffset;
+                const studentName = `${bundleName} ${i}`; 
+                const expiryTime = currentTime + expiryTimeOffset;
                 
                 updates['approvedStudents/' + newCode] = {
                     uid: newCode,
@@ -638,14 +666,15 @@
                     section: section,
                     pricePaid: 0,
                     addedByAdmin: CURRENT_ADMIN_ROLE,
-                    approvedAt: Date.now(),
+                    approvedAt: currentTime,
                     expiry: expiryTime,
                     deviceId: "",
                     isBlocked: false,
                     isTrial: durationType === 'trial',
                     deviceChangeCount: 0,
                     maxDeviceChanges: 5,
-                    deviceHistory: [] 
+                    deviceHistory: [],
+                    lastModified: currentTime // 🚨 تحديث زمني
                 };
                 codesGenerated.push(newCode);
             }
@@ -663,14 +692,12 @@
         }, e);
 
 
-        // 💡 Main Auth State Observer - تبقى كما هي
-
         onAuthStateChanged(auth, (user) => {
             const loginContainer = document.getElementById('loginContainer');
             const mainContent = document.getElementById('mainContent');
             const logoutBtn = document.getElementById('logoutBtn');
             const addCodeBtn = document.getElementById('addCodeButton');
-            const bulkCodeBtn = document.getElementById('bulkCodeButton'); // 💡 زرار الأكواد المتعددة
+            const bulkCodeBtn = document.getElementById('bulkCodeButton'); 
             
             if (user) {
                 currentUserUid = user.uid;
@@ -680,7 +707,7 @@
                         loginContainer.style.display = 'none';
                         mainContent.style.display = 'block';
                         addCodeBtn.style.display = 'block';
-                        bulkCodeBtn.style.display = 'block'; // 💡 إظهار الزر
+                        bulkCodeBtn.style.display = 'block'; 
                         logoutBtn.style.display = 'block';
                         loadSaraCodes(); 
                     } else {
@@ -692,12 +719,11 @@
                 loginContainer.style.display = 'block';
                 mainContent.style.display = 'none';
                 addCodeBtn.style.display = 'none';
-                bulkCodeBtn.style.display = 'none'; // 💡 إخفاء الزر
+                bulkCodeBtn.style.display = 'none'; 
                 logoutBtn.style.display = 'none';
             }
         });
 
-        // 💡 الدوال المساعدة للعرض
         
         function formatExpiry(timestamp) {
             const now = Date.now();
@@ -708,7 +734,6 @@
             return `${days}ي ${hours}س`;
         }
         
-        // 💡 دالة عرض جدول الأكواد (مُحدَّث لسجل الأجهزة والـ Checkbox)
         function renderCodesTable(codes) {
             const tbody = document.getElementById('codesTableBody');
             tbody.innerHTML = '';
@@ -720,7 +745,6 @@
                 return;
             }
 
-            // 💡 تحديد ما إذا كان كل الأكواد الحالية محددة أم لا لتحديث زر "تحديد الكل"
             const allChecked = codes.every(c => selectedUids.has(c.uid));
             document.getElementById('checkAllCodes').checked = allChecked;
             document.getElementById('checkAllCodes').onchange = (e) => toggleAllSelection(e.target.checked, codes);
@@ -761,7 +785,6 @@
                 const ejectDisabled = !data.deviceId || isExpired || isBlocked ? 'disabled' : '';
                 const ejectTitle = !data.deviceId ? 'الكود غير مفعل' : (isExpired || isBlocked ? 'لا يمكن إخراج الجهاز لكود غير نشط' : '');
 
-                // 💡 عرض مرات التغيير والسجل
                 const changeCount = data.deviceChangeCount || 0;
                 const maxChanges = data.maxDeviceChanges || 5;
                 const historyCount = data.deviceHistory?.length || 0;
@@ -790,10 +813,9 @@
                 `;
                 tbody.appendChild(tr);
             });
-            window.updateBulkControls(); // تأكد من تحديث لوحة التحكم الجماعية بعد العرض
+            window.updateBulkControls();
         }
         
-        // 💡 دالة عرض جدول الأجهزة المحظورة (تبقى كما هي)
         window.renderBlockedDevicesTable = (devices) => {
              const tbody = document.getElementById('blockedDevicesTableBody');
              tbody.innerHTML = '';
@@ -823,8 +845,6 @@
              });
         }
         
-        // 💡 باقي الدوال المساعدة (renderStats, toggleStats, toggleAddCodeForm) تبقى كما هي
-
         window.renderStats = (totalCodes, totalAmount) => {
              const statsContainer = document.getElementById('statsContainer');
              statsContainer.innerHTML = `
@@ -858,7 +878,6 @@
             const form = document.getElementById('addCodeFormContainer');
             if (show) {
                  checkAuthAndProceed(() => {
-                    // 💡 إخفاء فورم الأكواد المتعددة عند فتح فورم الكود الواحد
                     document.getElementById('bulkCodeFormContainer').style.display = 'none'; 
                     form.style.display = 'block';
                     document.getElementById('newCodeDisplay').textContent = generateUniqueCode();
@@ -887,7 +906,7 @@
             --bg-mid: #222;
             --hover-dark: #333;
             --expired-color: #f7a048; 
-            --bulk-bg: #301e00; /* لون جديد للـ Bulk Controls */
+            --bulk-bg: #301e00; 
         }
         * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
         body { background: var(--bg-dark); color: var(--text-light); margin: 0; padding: 0; }
@@ -917,7 +936,7 @@
         #addCodeButton:hover, #statsButton:hover, #blockedDevicesButton:hover, #bulkCodeButton:hover { background: #00cc00; }
         #statsButton { background: var(--secondary); }
         #blockedDevicesButton { background: var(--warn); color: var(--bg-dark); } 
-        #bulkCodeButton { background: #0099cc; color: var(--text-light); } /* 💡 زرار الأكواد المتعددة */
+        #bulkCodeButton { background: #0099cc; color: var(--text-light); } 
 
         #statsContainer { 
             display: none; 
@@ -1049,7 +1068,7 @@
         #blockedDevicesArea h2 { color: var(--error); border-bottom: 1px solid #444; padding-bottom: 10px; margin-bottom: 15px; }
         #blockNewDeviceBtn { background: var(--error); color: var(--text-light); margin-bottom: 15px; }
 
-        /* 💡 Bulk Controls Style */
+        /* Bulk Controls Style */
         #bulkControls {
              background: var(--bulk-bg);
              border-left: 5px solid var(--warn) !important;
