@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AHMED || Full Mark</title>
+    <title>sara Full Mark</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js';
@@ -21,7 +21,7 @@
             measurementId: "G-J5R2EFM2D0"
         };
         
-        const CURRENT_ADMIN_ROLE = 'ahmed'; 
+        const CURRENT_ADMIN_ROLE = 'sara'; 
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
         const auth = getAuth(app);
@@ -30,12 +30,12 @@
         
         let allApprovedCodes = {}; 
         let currentUserUid = null;
-        const AHMED_FIXED_UID = "4Mr7j0R3GmNrpxeaOWKzv71oHpY2"; 
+        const AHMED_FIXED_UID = "teTUzjeVAMVt9tdxK823VlWumRi2"; 
         let allSaraCodes = [];
         let currentReportCodes = [];
         let allBlockedDevices = []; 
 
-        const DIVISIONS = ['علمي علوم', 'ادبي', 'علمي رياضة', 'ازهر']; 
+        const DIVISIONS = ['علمي علوم', 'أدبي', 'علمي رياضة', 'أزهر']; 
         
         let selectedUids = new Set(); 
 
